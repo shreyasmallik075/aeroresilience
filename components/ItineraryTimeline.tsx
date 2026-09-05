@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plane, Train, Building2, Car, AlertTriangle, CheckCircle2, ArrowRight } from 'lucide-react';
-import { ItineraryNode, ItineraryEdge } from '@/lib/types';
+import { useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Plane, Train, Building2, Car, AlertTriangle, CheckCircle2, ArrowRight, Clock,
+} from "lucide-react";
+import { ItineraryNode, ItineraryEdge } from "@/lib/types";
 
 interface ItineraryTimelineProps {
   nodes: ItineraryNode[];
@@ -11,140 +13,110 @@ interface ItineraryTimelineProps {
   isSimulating: boolean;
 }
 
+const statusStyles = {
+  intact:    { border: "border-gray-200",    bg: "bg-white",          icon: "text-blue-600",    badge: "", badgeBg: "" },
+  warning:   { border: "border-amber-400",   bg: "bg-amber-50",       icon: "text-amber-600",   badge: "bg-amber-100 text-amber-700 border-amber-300",  badgeBg: "card-warning" },
+  critical:  { border: "border-red-400",     bg: "bg-red-50",         icon: "text-red-600",     badge: "bg-red-100 text-red-700 border-red-300",        badgeBg: "card-danger" },
+  recovered: { border: "border-emerald-400", bg: "bg-emerald-50",     icon: "text-emerald-600", badge: "bg-emerald-100 text-emerald-700 border-emerald-300", badgeBg: "card-success" },
+};
+
+function NodeIcon({ type, status }: { type: ItineraryNode["type"]; status: ItineraryNode["status"] }) {
+  const cls = `w-5 h-5 ${statusStyles[status].icon}`;
+  if (type === "flight")   return <Plane className={cls} />;
+  if (type === "train")    return <Train className={cls} />;
+  if (type === "hotel")    return <Building2 className={cls} />;
+  if (type === "transfer") return <Car className={cls} />;
+  return <Plane className={cls} />;
+}
+
 export default function ItineraryTimeline({ nodes, edges }: ItineraryTimelineProps) {
-  const statusCounts = useMemo(() => {
-    return nodes.reduce(
-      (acc, node) => {
-        acc[node.status] = (acc[node.status] || 0) + 1;
-        return acc;
-      },
-      { intact: 0, warning: 0, critical: 0, recovered: 0 } as Record<string, number>
-    );
-  }, [nodes]);
-
-  const getNodeIcon = (type: string, status: string) => {
-    const iconClass = getStatusColor(status, 'text');
-    switch (type) {
-      case 'flight':
-        return <Plane className={`w-5 h-5 ${iconClass}`} />;
-      case 'train':
-        return <Train className={`w-5 h-5 ${iconClass}`} />;
-      case 'hotel':
-        return <Building2 className={`w-5 h-5 ${iconClass}`} />;
-      case 'transfer':
-        return <Car className={`w-5 h-5 ${iconClass}`} />;
-      default:
-        return <Plane className={`w-5 h-5 ${iconClass}`} />;
-    }
-  };
-
-  const getStatusColor = (status: string, property: 'border' | 'text' | 'bg') => {
-    switch (status) {
-      case 'warning':
-        return property === 'border' ? 'border-amber-500/50 glow-border-warning' : property === 'text' ? 'text-amber-500' : 'bg-amber-500/10';
-      case 'critical':
-        return property === 'border' ? 'border-red-500/50 glow-border-danger' : property === 'text' ? 'text-red-500' : 'bg-red-500/10';
-      case 'recovered':
-        return property === 'border' ? 'border-emerald-500/50 glow-border-success' : property === 'text' ? 'text-emerald-500' : 'bg-emerald-500/10';
-      case 'intact':
-      default:
-        return property === 'border' ? 'border-zinc-700' : property === 'text' ? 'text-zinc-400' : 'bg-zinc-800/50';
-    }
-  };
+  const counts = useMemo(() => nodes.reduce((a, n) => ({ ...a, [n.status]: (a[n.status] || 0) + 1 }), {} as Record<string, number>), [nodes]);
 
   return (
-    <div className="flex flex-col h-full w-full bg-zinc-950 rounded-xl border border-zinc-800 p-6 overflow-y-auto overflow-x-hidden">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2 text-zinc-500">
-          <h2 className="text-xs font-mono tracking-widest uppercase">Dependency Chain</h2>
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-full">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold text-gray-800 text-sm">Itinerary Dependency Graph</h2>
+          <p className="text-xs text-gray-400 mt-0.5 font-mono">BOM → DEL → AGC · PNR AR-9082</p>
         </div>
-        
-        <div className="flex items-center gap-2 text-xs font-mono">
-          {statusCounts.intact > 0 && <span className="px-2 py-1 rounded bg-zinc-800 text-zinc-400">{statusCounts.intact} Intact</span>}
-          {statusCounts.warning > 0 && <span className="px-2 py-1 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">{statusCounts.warning} Warning</span>}
-          {statusCounts.critical > 0 && <span className="px-2 py-1 rounded bg-red-500/10 text-red-500 border border-red-500/20">{statusCounts.critical} Critical</span>}
-          {statusCounts.recovered > 0 && <span className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">{statusCounts.recovered} Recovered</span>}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {counts.intact    > 0 && <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 text-xs font-medium">{counts.intact} On Track</span>}
+          {counts.warning   > 0 && <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium">{counts.warning} At Risk</span>}
+          {counts.critical  > 0 && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-medium">{counts.critical} Critical</span>}
+          {counts.recovered > 0 && <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium">{counts.recovered} Recovered</span>}
         </div>
       </div>
 
-      <div className="relative flex-1">
-        {/* Left main connecting line */}
-        <div className="absolute left-[1.375rem] top-4 bottom-4 w-px bg-zinc-800 -z-0" />
+      {/* Timeline */}
+      <div className="flex-1 overflow-y-auto p-5">
+        <div className="relative">
+          {/* Vertical spine */}
+          <div className="absolute left-5 top-5 bottom-5 w-px bg-gray-200" />
 
-        <div className="flex flex-col gap-0 pb-4">
           <AnimatePresence mode="popLayout">
-            {nodes.map((node, index) => {
-              // Edge appears between node[index] and node[index+1]
-              const edge = index < edges.length ? edges[index] : undefined;
-              const isCritical = node.status === 'critical';
-              
+            {nodes.map((node, idx) => {
+              const s = statusStyles[node.status];
+              const edge = idx < edges.length ? edges[idx] : undefined;
+
               return (
                 <motion.div
-                  key={node.id + '-' + node.status}
+                  key={node.id + node.status}
                   layout
-                  initial={{ opacity: 0, x: -20 }}
+                  initial={{ opacity: 0, x: -12 }}
                   animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ delay: index * 0.1, duration: 0.3 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ delay: idx * 0.08, duration: 0.3 }}
+                  className="relative"
                 >
-                  <div className="relative flex items-start gap-4">
-                    {/* Node Circle on timeline */}
-                    <div className={`relative z-10 mt-4 flex items-center justify-center w-11 h-11 rounded-full bg-zinc-900 border-2 shadow-sm shrink-0 transition-colors duration-500 ${
-                      node.status === 'critical' ? 'border-red-500/60' :
-                      node.status === 'warning' ? 'border-amber-500/60' :
-                      node.status === 'recovered' ? 'border-emerald-500/60' :
-                      'border-zinc-700'
-                    }`}>
-                      {getNodeIcon(node.type, node.status)}
+                  {/* Node row */}
+                  <div className="flex items-start gap-4 mb-0">
+                    {/* Circle on spine */}
+                    <div className={`relative z-10 mt-4 w-10 h-10 rounded-full border-2 ${s.border} ${s.bg} flex items-center justify-center shadow-sm shrink-0`}>
+                      <NodeIcon type={node.type} status={node.status} />
                     </div>
-                    
-                    {/* Node Card */}
-                    <motion.div 
+
+                    {/* Card */}
+                    <motion.div
                       layout
-                      className={`flex-1 my-2 rounded-lg border bg-zinc-800/50 p-4 transition-all duration-500 ${getStatusColor(node.status, 'border')} ${isCritical ? 'animate-pulse' : ''}`}
+                      className={`flex-1 mb-3 rounded-xl border ${s.border} ${s.bg} p-4 transition-all duration-500 ${s.badgeBg}`}
                     >
-                      <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-zinc-200">{node.label}</span>
-                          <span className="px-2 py-0.5 rounded text-xs font-mono bg-zinc-700 text-zinc-300">
+                          <span className="font-semibold text-gray-800 text-sm">{node.label}</span>
+                          <span className="text-[11px] font-mono bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded">
                             {node.code}
                           </span>
                         </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-sm font-mono text-zinc-400 mb-2 flex-wrap">
-                        <span>{node.from}</span>
-                        <ArrowRight className="w-3 h-3 text-zinc-600 shrink-0" />
-                        <span>{node.to}</span>
-                        <span className="ml-auto px-1.5 py-0.5 rounded bg-zinc-900/50 border border-zinc-700/50 text-xs whitespace-nowrap">
-                          {node.scheduledDeparture} - {node.scheduledArrival}
-                        </span>
-                      </div>
-
-                      {node.details && (
-                        <div className="text-xs text-zinc-500">
-                          {node.details}
+                        <div className="flex items-center gap-1 text-xs text-gray-400 font-mono whitespace-nowrap shrink-0">
+                          <Clock className="w-3 h-3" />
+                          {node.scheduledDeparture}–{node.scheduledArrival}
                         </div>
-                      )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-2">
+                        <span className="font-medium text-gray-600">{node.from}</span>
+                        <ArrowRight className="w-3 h-3 text-gray-300 shrink-0" />
+                        <span className="font-medium text-gray-600">{node.to}</span>
+                      </div>
+
+                      {node.details && <p className="text-xs text-gray-400 mb-2">{node.details}</p>}
 
                       <AnimatePresence>
                         {node.statusMessage && (
                           <motion.div
                             initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                            animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+                            animate={{ opacity: 1, height: "auto", marginTop: 8 }}
                             exit={{ opacity: 0, height: 0, marginTop: 0 }}
                             className="overflow-hidden"
                           >
-                            <div className={`flex items-center gap-2 px-3 py-2 rounded text-xs font-semibold ${
-                              node.status === 'warning' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse' :
-                              node.status === 'critical' ? 'bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse' :
-                              node.status === 'recovered' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
-                              'bg-zinc-800 text-zinc-400'
+                            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border ${s.badge} ${
+                              node.status === "critical" || node.status === "warning" ? "animate-pulse" : ""
                             }`}>
-                              {node.status === 'critical' && <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
-                              {node.status === 'recovered' && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
-                              {node.status === 'warning' && <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
-                              <span>{node.statusMessage}</span>
+                              {node.status === "critical"  && <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
+                              {node.status === "warning"   && <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
+                              {node.status === "recovered" && <CheckCircle2  className="w-3.5 h-3.5 shrink-0" />}
+                              {node.statusMessage}
                             </div>
                           </motion.div>
                         )}
@@ -152,35 +124,28 @@ export default function ItineraryTimeline({ nodes, edges }: ItineraryTimelinePro
                     </motion.div>
                   </div>
 
-                  {/* Edge Connection (shown between this node and the next) */}
+                  {/* Edge connector */}
                   {edge && (
-                    <motion.div 
-                      layout 
-                      className="relative flex items-center h-12 my-1"
-                    >
-                      <div className="absolute top-0 bottom-0 left-[1.375rem] -ml-px w-[2px] z-10">
-                        {edge.status === 'critical' ? (
-                          <div className="w-full h-full bg-red-500 animate-pulse" />
-                        ) : edge.status === 'recovered' ? (
-                          <div className="w-full h-full bg-emerald-500" />
-                        ) : edge.status === 'warning' ? (
-                          <div className="w-full h-full border-l-2 border-dashed border-amber-500" />
-                        ) : (
-                          <div className="w-full h-full border-l-2 border-dashed border-zinc-700" />
-                        )}
+                    <motion.div layout className="flex items-center gap-4 h-10 mb-0">
+                      <div className="w-10 shrink-0 flex justify-center">
+                        <div className={`w-px h-full ${
+                          edge.status === "critical"  ? "bg-red-400" :
+                          edge.status === "warning"   ? "bg-amber-400" :
+                          edge.status === "recovered" ? "bg-emerald-400" :
+                          "bg-gray-200"
+                        }`} />
                       </div>
-                      
-                      <div className="ml-[4.5rem]">
-                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono border ${
-                          edge.status === 'critical' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                          edge.status === 'warning' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                          edge.status === 'recovered' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                          'bg-zinc-900 text-zinc-500 border-zinc-800'
-                        }`}>
-                          {edge.status === 'critical' && <AlertTriangle className="w-3 h-3 shrink-0" />}
-                          {edge.status === 'recovered' && <CheckCircle2 className="w-3 h-3 shrink-0" />}
-                          <span>{edge.label} • {edge.bufferMinutes > 0 ? `${edge.bufferMinutes} min buffer` : edge.bufferMinutes === 0 ? 'BROKEN' : `${Math.abs(edge.bufferMinutes)} min deficit`}</span>
-                        </div>
+                      <div className={`text-xs font-mono px-3 py-1 rounded-full border ${
+                        edge.status === "critical"  ? "bg-red-50 text-red-600 border-red-200" :
+                        edge.status === "warning"   ? "bg-amber-50 text-amber-600 border-amber-200" :
+                        edge.status === "recovered" ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                        "bg-gray-50 text-gray-400 border-gray-200"
+                      }`}>
+                        {edge.status === "critical"  && <span className="mr-1">⚠</span>}
+                        {edge.status === "recovered" && <span className="mr-1">✓</span>}
+                        {edge.label}
+                        {edge.bufferMinutes > 0 && ` · ${edge.bufferMinutes} min`}
+                        {edge.bufferMinutes < 0 && ` · ${Math.abs(edge.bufferMinutes)} min deficit`}
                       </div>
                     </motion.div>
                   )}

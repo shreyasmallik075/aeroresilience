@@ -1,147 +1,136 @@
 "use client";
 
-import React from "react";
 import { DisruptionScenario } from "@/lib/types";
 import {
-  Zap,
-  CheckCircle2,
-  Clock,
-  XCircle,
-  AlertTriangle,
-  Check,
-  Loader2,
+  CheckCircle2, Clock, XCircle, AlertTriangle, Loader2, Check, Info,
 } from "lucide-react";
 
 interface SimulationControlBarProps {
   selectedScenario: DisruptionScenario;
-  onScenarioChange: (scenario: DisruptionScenario) => void;
+  onScenarioChange: (s: DisruptionScenario) => void;
   onTrigger: () => void;
   isSimulating: boolean;
   recoveryAccepted: boolean;
+  delayMins: number;
+  onDelayChange: (v: number) => void;
+}
+
+function computeImpact(delayMins: number): { text: string; color: string } {
+  const flightArrMins = 16 * 60 + 15 + delayMins; // 16:15 + delay
+  const trainDepMins = 17 * 60 + 30; // 17:30
+  const buffer = trainDepMins - flightArrMins;
+
+  if (buffer >= 45)
+    return { text: `${buffer} min buffer remaining — connection at risk but catchable`, color: "text-amber-600" };
+  if (buffer >= 0)
+    return { text: `Only ${buffer} min buffer — connection critically tight`, color: "text-orange-600" };
+  return { text: `${Math.abs(buffer)} min connection deficit — train MISSED, cascade triggered`, color: "text-red-600" };
 }
 
 export default function SimulationControlBar({
-  selectedScenario,
-  onScenarioChange,
-  onTrigger,
-  isSimulating,
-  recoveryAccepted,
+  selectedScenario, onScenarioChange, onTrigger,
+  isSimulating, recoveryAccepted, delayMins, onDelayChange,
 }: SimulationControlBarProps) {
-  const scenarioConfigs: {
-    id: DisruptionScenario;
-    label: string;
-    icon: typeof CheckCircle2;
-    selectedStyles: string;
-    iconColor: string;
-  }[] = [
-    {
-      id: "none",
-      label: "Normal Operations",
-      icon: CheckCircle2,
-      selectedStyles:
-        "bg-emerald-950/60 text-emerald-200 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.35)]",
-      iconColor: "text-emerald-400",
-    },
-    {
-      id: "delay",
-      label: "Flight Delayed +180m",
-      icon: Clock,
-      selectedStyles:
-        "bg-amber-950/60 text-amber-200 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.35)]",
-      iconColor: "text-amber-400",
-    },
-    {
-      id: "cancel",
-      label: "Flight Canceled",
-      icon: XCircle,
-      selectedStyles:
-        "bg-rose-950/60 text-rose-200 border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.35)]",
-      iconColor: "text-rose-400",
-    },
-  ];
+  const impact = computeImpact(delayMins);
 
   return (
-    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl mx-6 mt-4 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-      {/* Left side: Label and Scenario Toggle Group */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
-        <div className="flex items-center gap-2 text-xs font-mono tracking-widest text-zinc-500 uppercase select-none shrink-0">
-          <Zap className="w-4 h-4 text-cyan-400" />
-          <span>Disruption Simulator</span>
-        </div>
+    <div className="bg-white border-b border-gray-200 px-5 py-4 shadow-sm">
+      <div className="max-w-[1600px] mx-auto flex flex-col lg:flex-row lg:items-center gap-4">
 
-        {/* Button group for scenarios */}
-        <div className="inline-flex flex-wrap sm:flex-nowrap p-1 bg-zinc-950/70 rounded-lg border border-zinc-800/80 gap-1.5">
-          {scenarioConfigs.map((item) => {
-            const isSelected = selectedScenario === item.id;
-            const Icon = item.icon;
-
-            return (
+        {/* Scenario pills */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">
+            Scenario
+          </span>
+          <div className="flex gap-1.5 flex-wrap">
+            {[
+              { id: "none" as const,   label: "Normal Operations",  Icon: CheckCircle2, sel: "bg-green-600 text-white border-green-600",   unsel: "border-gray-200 text-gray-600 hover:border-green-300 hover:text-green-700 hover:bg-green-50" },
+              { id: "delay" as const,  label: "Flight Delayed",     Icon: Clock,        sel: "bg-amber-500 text-white border-amber-500",    unsel: "border-gray-200 text-gray-600 hover:border-amber-300 hover:text-amber-700 hover:bg-amber-50" },
+              { id: "cancel" as const, label: "Flight Canceled",    Icon: XCircle,      sel: "bg-red-600 text-white border-red-600",        unsel: "border-gray-200 text-gray-600 hover:border-red-300 hover:text-red-700 hover:bg-red-50" },
+            ].map(({ id, label, Icon, sel, unsel }) => (
               <button
-                key={item.id}
-                type="button"
+                key={id}
                 disabled={isSimulating}
-                onClick={() => onScenarioChange(item.id)}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-medium border transition-all duration-200 select-none ${
-                  isSelected
-                    ? `${item.selectedStyles} font-semibold`
-                    : "bg-zinc-800 text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-zinc-750"
-                } ${
-                  isSimulating
-                    ? "opacity-50 cursor-not-allowed"
-                    : "cursor-pointer"
+                onClick={() => onScenarioChange(id)}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                  selectedScenario === id ? sel : unsel
                 }`}
               >
-                <Icon
-                  className={`w-3.5 h-3.5 transition-colors duration-200 ${
-                    isSelected ? item.iconColor : "text-zinc-400"
-                  }`}
-                />
-                <span>{item.label}</span>
+                <Icon className="w-3.5 h-3.5" />
+                {label}
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Right side: Action Button */}
-      <div className="flex items-center justify-end">
-        {recoveryAccepted ? (
-          <button
-            type="button"
-            disabled
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-950/60 text-emerald-400 border border-emerald-500/40 text-sm font-semibold shadow-[0_0_15px_rgba(16,185,129,0.25)] cursor-not-allowed transition-all duration-200 select-none"
-          >
-            <Check className="w-4 h-4 text-emerald-400" />
-            <span>Recovery Complete ✓</span>
-          </button>
-        ) : isSimulating ? (
-          <button
-            type="button"
-            disabled
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 text-zinc-300 border border-zinc-600 text-sm font-medium shadow-inner cursor-not-allowed transition-all duration-200 select-none"
-          >
-            <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
-            <span>Simulation Running...</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onTrigger}
-            disabled={selectedScenario === "none"}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 border select-none ${
-              selectedScenario === "none"
-                ? "bg-zinc-800 text-zinc-500 border-zinc-700/60 cursor-not-allowed opacity-50 shadow-none"
-                : "bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white border-cyan-400/30 shadow-[0_0_18px_rgba(6,182,212,0.35)] active:scale-95 cursor-pointer"
-            }`}
-          >
-            <AlertTriangle
-              className={`w-4 h-4 transition-colors ${
-                selectedScenario === "none" ? "text-zinc-500" : "text-white"
-              }`}
+        {/* Delay slider — only when delay selected */}
+        {selectedScenario === "delay" && (
+          <div className="flex-1 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 animate-fade-up">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-amber-800 uppercase tracking-wider">
+                Flight Delay Duration
+              </span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={15}
+                  max={360}
+                  step={15}
+                  value={delayMins}
+                  onChange={e => onDelayChange(Math.min(360, Math.max(15, Number(e.target.value))))}
+                  className="w-16 text-center text-sm font-mono font-bold text-amber-900 bg-white border border-amber-300 rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+                <span className="text-xs text-amber-700 font-medium">mins</span>
+              </div>
+            </div>
+
+            <input
+              type="range"
+              min={15}
+              max={360}
+              step={15}
+              value={delayMins}
+              onChange={e => onDelayChange(Number(e.target.value))}
+              className="w-full accent-amber-500"
             />
-            <span>Trigger Disruption Event</span>
-          </button>
+
+            <div className="flex justify-between text-[10px] text-amber-600 font-mono mt-1 mb-2">
+              <span>15m</span><span>1h</span><span>2h</span><span>3h</span><span>4h</span><span>5h</span><span>6h</span>
+            </div>
+
+            {/* Impact computation */}
+            <div className={`flex items-start gap-2 text-xs ${impact.color}`}>
+              <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span className="font-medium">{impact.text}</span>
+            </div>
+          </div>
         )}
+
+        {/* CTA */}
+        <div className="flex items-center gap-3 ml-auto shrink-0">
+          {recoveryAccepted ? (
+            <button disabled className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-green-100 text-green-700 border border-green-200 text-sm font-semibold cursor-not-allowed">
+              <Check className="w-4 h-4" /> Recovery Complete
+            </button>
+          ) : isSimulating ? (
+            <button disabled className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gray-100 text-gray-500 border border-gray-200 text-sm font-semibold cursor-not-allowed">
+              <Loader2 className="w-4 h-4 animate-spin" /> Running…
+            </button>
+          ) : (
+            <button
+              onClick={onTrigger}
+              disabled={selectedScenario === "none"}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                selectedScenario === "none"
+                  ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+                  : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow-md active:scale-95"
+              }`}
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Trigger Disruption Event
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,4 @@
 export type DisruptionScenario = 'none' | 'delay' | 'cancel';
-
 export type NodeStatus = 'intact' | 'warning' | 'critical' | 'recovered';
 
 export interface ItineraryNode {
@@ -31,6 +30,23 @@ export interface AgentLog {
   type: 'info' | 'warning' | 'success' | 'error';
 }
 
+export interface StandbyFlight {
+  id: string;
+  flightCode: string;
+  airline: string;
+  airlineCode: string;
+  departure: string;
+  arrival: string;
+  aircraft: string;
+  seatsAvailable: number;
+  fareClass: string;
+  fareDelta: string;
+  status: 'available' | 'waitlisted' | 'full';
+  gate: string;
+  terminal: string;
+  durationMins: number;
+}
+
 export interface RecoveryOption {
   id: string;
   name: string;
@@ -41,6 +57,7 @@ export interface RecoveryOption {
   costDelta: string;
   stressScore: number;
   recommended: boolean;
+  flightCode?: string;
 }
 
 export interface CompensationClaim {
@@ -56,15 +73,9 @@ export interface CompensationClaim {
   body: string;
 }
 
-export interface AppState {
-  scenario: DisruptionScenario;
-  isSimulating: boolean;
-  simulationPhase: number;
-  nodes: ItineraryNode[];
-  edges: ItineraryEdge[];
-  agentLogs: AgentLog[];
-  recoveryOptions: RecoveryOption[];
-  showCompensation: boolean;
-  recoveryAccepted: boolean;
-  compensationClaim: CompensationClaim | null;
+export interface User {
+  name: string;
+  email: string;
+  pnr: string;
+  avatarInitials: string;
 }

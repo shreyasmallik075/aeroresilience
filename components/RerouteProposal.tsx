@@ -1,137 +1,171 @@
 "use client";
 
-import React from 'react';
-import { RecoveryOption } from '@/lib/types';
-import { Clock, Banknote, Heart, CheckCircle2, Sparkles } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { RecoveryOption, StandbyFlight } from "@/lib/types";
+import { motion } from "framer-motion";
+import {
+  Clock, Banknote, Heart, CheckCircle2, Sparkles, Plane, Info,
+} from "lucide-react";
 
 interface RerouteProposalProps {
   options: RecoveryOption[];
   onAccept: () => void;
   recoveryAccepted: boolean;
+  selectedFlight: StandbyFlight | null;
 }
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.15 }
-  }
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4 } }
-};
-
-export default function RerouteProposal({ options, onAccept, recoveryAccepted }: RerouteProposalProps) {
+export default function RerouteProposal({
+  options,
+  onAccept,
+  recoveryAccepted,
+  selectedFlight,
+}: RerouteProposalProps) {
   if (!options || options.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[300px] border border-dashed border-zinc-800 rounded-xl bg-zinc-900/30">
-        <Sparkles className="w-8 h-8 text-zinc-700 mb-3" />
-        <p className="text-zinc-600 text-sm">Recovery options will appear here after disruption analysis.</p>
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col items-center justify-center min-h-[300px] h-full gap-3">
+        <Sparkles className="w-8 h-8 text-gray-200" />
+        <p className="text-gray-400 text-sm text-center max-w-xs">
+          Trigger a disruption event to generate AI-powered recovery options.
+        </p>
       </div>
     );
   }
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="show"
-      className="space-y-4"
-    >
-      {options.map((option) => (
+    <div className="flex flex-col gap-4 h-full overflow-y-auto">
+      {/* Selected flight banner */}
+      {selectedFlight && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-3 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl text-sm"
+        >
+          <Plane className="w-4 h-4 text-indigo-500 shrink-0" />
+          <span className="text-indigo-800">
+            Recovery plans built around{" "}
+            <span className="font-bold font-mono">{selectedFlight.flightCode}</span>{" "}
+            ({selectedFlight.airline} · {selectedFlight.departure} DEP · Gate {selectedFlight.gate},{" "}
+            {selectedFlight.terminal})
+          </span>
+        </motion.div>
+      )}
+
+      {!selectedFlight && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+          <Info className="w-3.5 h-3.5 shrink-0" />
+          No standby flight selected — showing default recovery plan. Switch to Standby Flights tab to choose.
+        </div>
+      )}
+
+      {options.map((option, i) => (
         <motion.div
           key={option.id}
-          variants={itemVariants}
-          className={`relative p-5 rounded-xl border transition-all duration-300 ${
-            option.recommended
-              ? 'border-cyan-500/30 bg-zinc-800/50 glow-border'
-              : 'border-zinc-700 bg-zinc-800/20'
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: i * 0.12, duration: 0.35 }}
+          className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${
+            option.recommended ? "border-indigo-300" : "border-gray-200"
           }`}
         >
-          {option.recommended && (
-            <div className="absolute top-4 right-4">
-              <span className="px-2.5 py-1 text-[10px] font-bold tracking-wider text-cyan-400 bg-cyan-400/10 rounded-full border border-cyan-400/20 uppercase">
+          {/* Card header */}
+          <div className={`px-5 py-3 flex items-center justify-between ${
+            option.recommended ? "bg-indigo-600" : "bg-gray-50 border-b border-gray-100"
+          }`}>
+            <div>
+              <h3 className={`font-semibold text-sm ${option.recommended ? "text-white" : "text-gray-800"}`}>
+                {option.name}
+              </h3>
+              <p className={`text-xs mt-0.5 ${option.recommended ? "text-indigo-200" : "text-gray-400"}`}>
+                {option.description}
+              </p>
+            </div>
+            {option.recommended && (
+              <span className="ml-4 shrink-0 px-2.5 py-1 bg-white/20 text-white text-[11px] font-bold uppercase tracking-wider rounded-full border border-white/30">
                 Recommended
               </span>
-            </div>
-          )}
-
-          <div className="mb-4">
-            <div className="flex items-center gap-3 mb-2">
-              <h3 className="text-lg font-semibold text-zinc-100">{option.name}</h3>
-              <span className="px-2 py-0.5 text-xs text-zinc-300 bg-zinc-700/50 rounded-full border border-zinc-600/30">
+            )}
+            {!option.recommended && (
+              <span className="ml-4 shrink-0 px-2.5 py-1 bg-gray-100 text-gray-500 text-[11px] font-semibold rounded-full border border-gray-200">
                 {option.tag}
               </span>
-            </div>
-            <p className="text-sm text-zinc-400">{option.description}</p>
+            )}
           </div>
 
-          <div className="space-y-2 mb-6">
-            {option.steps.map((step, idx) => (
-              <div key={idx} className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-cyan-500 mt-0.5 shrink-0" />
-                <span className="text-sm text-zinc-300">{step}</span>
-              </div>
-            ))}
-          </div>
+          <div className="p-5">
+            {/* Steps */}
+            <div className="space-y-2 mb-5">
+              {option.steps.map((step, idx) => (
+                <div key={idx} className="flex items-start gap-2.5">
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 ${
+                    option.recommended
+                      ? "bg-indigo-100 text-indigo-700"
+                      : "bg-gray-100 text-gray-500"
+                  }`}>
+                    {idx + 1}
+                  </div>
+                  <span className="text-sm text-gray-700 leading-relaxed">{step}</span>
+                </div>
+              ))}
+            </div>
 
-          <div className="grid grid-cols-3 gap-4 py-4 border-t border-zinc-700/50">
-            <div>
-              <div className="flex items-center gap-1.5 text-zinc-400 mb-1">
-                <Clock className="w-3.5 h-3.5" />
-                <span className="text-xs">Arrival Delay</span>
+            {/* Metrics */}
+            <div className="grid grid-cols-3 gap-3 py-4 border-t border-gray-100 mb-4">
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-1 text-gray-400 mb-1">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span className="text-xs">Arrival Delay</span>
+                </div>
+                <div className="font-mono text-sm font-bold text-gray-800">{option.arrivalDelay}</div>
               </div>
-              <div className="font-mono text-sm text-zinc-100">{option.arrivalDelay}</div>
+              <div className="text-center border-x border-gray-100">
+                <div className="flex items-center justify-center gap-1 text-gray-400 mb-1">
+                  <Banknote className="w-3.5 h-3.5" />
+                  <span className="text-xs">Cost Delta</span>
+                </div>
+                <div className={`font-mono text-sm font-bold ${
+                  option.costDelta.includes("₹0") ? "text-green-600" : "text-gray-800"
+                }`}>
+                  {option.costDelta}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-1 text-gray-400 mb-1">
+                  <Heart className="w-3.5 h-3.5" />
+                  <span className="text-xs">Stress Score</span>
+                </div>
+                <div className="flex items-center justify-center gap-0.5 mt-1">
+                  {Array.from({ length: 10 }).map((_, j) => (
+                    <div
+                      key={j}
+                      className={`h-2 w-2 rounded-full ${
+                        j < option.stressScore ? "bg-indigo-400" : "bg-gray-100"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <div className="text-xs text-gray-400 font-mono mt-1">{option.stressScore}/10</div>
+              </div>
             </div>
-            <div>
-              <div className="flex items-center gap-1.5 text-zinc-400 mb-1">
-                <Banknote className="w-3.5 h-3.5" />
-                <span className="text-xs">Cost Delta</span>
-              </div>
-              <div className="font-mono text-sm text-zinc-100">{option.costDelta}</div>
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5 text-zinc-400 mb-1">
-                <Heart className="w-3.5 h-3.5" />
-                <span className="text-xs">Stress Score</span>
-              </div>
-              <div className="flex items-center gap-1 mt-1">
-                {[...Array(10)].map((_, i) => (
-                  <div
-                    key={i}
-                    className={`h-2 w-2 rounded-full transition-colors ${
-                      i < option.stressScore
-                        ? 'bg-indigo-500'
-                        : 'bg-zinc-700'
-                    }`}
-                  />
-                ))}
-                <span className="text-xs text-zinc-500 ml-1 font-mono">{option.stressScore}/10</span>
-              </div>
-            </div>
-          </div>
 
-          {option.recommended && (
-            <div className="mt-4 pt-4 border-t border-zinc-700/50">
+            {/* Accept CTA — only on recommended */}
+            {option.recommended && (
               <button
                 onClick={onAccept}
                 disabled={recoveryAccepted}
-                className={`w-full py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 font-medium text-sm transition-all duration-300 ${
+                className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
                   recoveryAccepted
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-cyan-500 to-indigo-600 text-white hover:shadow-[0_0_25px_rgba(6,182,212,0.4)] hover:scale-[1.02] active:scale-[0.98]'
+                    ? "bg-green-50 text-green-700 border border-green-200 cursor-not-allowed"
+                    : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow-md active:scale-[0.98]"
                 }`}
               >
-                <CheckCircle2 className="w-5 h-5" />
-                {recoveryAccepted ? 'Recovery Plan Accepted ✓' : 'Accept Recovery Plan & Auto-Sync Tickets'}
+                <CheckCircle2 className="w-4 h-4" />
+                {recoveryAccepted
+                  ? "Recovery Plan Accepted ✓"
+                  : "Accept Recovery Plan & Auto-Sync Tickets"}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </motion.div>
       ))}
-    </motion.div>
+    </div>
   );
 }

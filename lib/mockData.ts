@@ -5,7 +5,10 @@ import {
   AgentLog,
   RecoveryOption,
   CompensationClaim,
+  StandbyFlight,
 } from './types';
+
+// ─── INITIAL STATE ────────────────────────────────────────────────────────────
 
 export const initialNodes: ItineraryNode[] = [
   {
@@ -17,9 +20,9 @@ export const initialNodes: ItineraryNode[] = [
     scheduledDeparture: '14:00',
     scheduledArrival: '16:15',
     status: 'intact',
-    details: 'Boeing 787-8 Dreamliner • Seat 14B • Terminal 2',
+    details: 'Boeing 787-8 · Seat 14B · Terminal 2 · Gate 42',
     code: 'AI-804',
-    statusMessage: 'On Time • Gate 42',
+    statusMessage: 'On Time · Gate 42 Open',
   },
   {
     id: 'node-train-1',
@@ -30,41 +33,55 @@ export const initialNodes: ItineraryNode[] = [
     scheduledDeparture: '17:30',
     scheduledArrival: '19:10',
     status: 'intact',
-    details: 'Executive Anubhuti Class • Coach E1, Seat 24 • Platform 1',
+    details: 'Executive Class · Coach E1, Seat 24 · Platform 1',
     code: 'GE-1202',
-    statusMessage: 'Scheduled On Time',
+    statusMessage: 'Scheduled On Time · Platform 1',
   },
   {
     id: 'node-hotel-1',
     type: 'hotel',
-    label: 'The Oberoi Amarvilas',
+    label: 'The Oberoi Amarvilas, Agra',
     from: 'Agra Cantt (AGC)',
     to: 'Taj East Gate Rd, Agra',
     scheduledDeparture: '20:00',
     scheduledArrival: '20:30',
     status: 'intact',
-    details: 'Premier Room with Taj Mahal View • Check-in by 20:00',
+    details: 'Premier Room · Taj View · Check-in by 20:00',
     code: 'OA-RES-4401',
-    statusMessage: 'Reservation Confirmed • Check-in guaranteed',
+    statusMessage: 'Reservation Confirmed · Guaranteed Check-in',
   },
 ];
 
 export const initialEdges: ItineraryEdge[] = [
   {
-    id: 'edge-flight-train',
-    label: 'DEL T3 to NZM Station Transit Buffer',
+    id: 'edge-1',
+    label: 'DEL T3 → Nizamuddin Station',
     bufferMinutes: 75,
     status: 'intact',
   },
   {
-    id: 'edge-train-hotel',
-    label: 'Agra Cantt to Oberoi Transfer Buffer',
+    id: 'edge-2',
+    label: 'Agra Cantt → Oberoi Transfer',
     bufferMinutes: 45,
     status: 'intact',
   },
 ];
 
-export function getDelayScenarioNodes(): ItineraryNode[] {
+// ─── DELAY SCENARIO (dynamic based on delay minutes) ─────────────────────────
+
+export function getDelayScenarioNodes(delayMins: number): ItineraryNode[] {
+  const origDep = 14 * 60; // 14:00 in minutes
+  const origArr = 16 * 60 + 15; // 16:15
+  const newDep = origDep + delayMins;
+  const newArr = origArr + delayMins;
+  const fmt = (m: number) =>
+    `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+  const trainDep = 17 * 60 + 30; // 17:30
+  const bufferLeft = trainDep - newArr; // positive = buffer remaining, negative = deficit
+  const trainStatus: ItineraryNode['status'] = bufferLeft >= 45 ? 'warning' : 'critical';
+  const hotelStatus: ItineraryNode['status'] = bufferLeft < 0 ? 'warning' : 'intact';
+
   return [
     {
       id: 'node-flight-1',
@@ -72,12 +89,12 @@ export function getDelayScenarioNodes(): ItineraryNode[] {
       label: 'Air India AI-804',
       from: 'Mumbai (BOM)',
       to: 'Delhi (DEL)',
-      scheduledDeparture: '17:00',
-      scheduledArrival: '19:15',
+      scheduledDeparture: fmt(newDep),
+      scheduledArrival: fmt(newArr),
       status: 'warning',
-      details: 'Boeing 787-8 Dreamliner • Seat 14B • Departure delayed from 14:00',
+      details: `Boeing 787-8 · Seat 14B · Original departure: 14:00`,
       code: 'AI-804',
-      statusMessage: 'DELAYED +180 MIN (Weather)',
+      statusMessage: `DELAYED +${delayMins} MIN — Weather at BOM`,
     },
     {
       id: 'node-train-1',
@@ -87,23 +104,46 @@ export function getDelayScenarioNodes(): ItineraryNode[] {
       to: 'Agra Cantt (AGC)',
       scheduledDeparture: '17:30',
       scheduledArrival: '19:10',
-      status: 'critical',
-      details: 'Executive Anubhuti Class • Train will depart 1h 45m before flight arrival in Delhi',
+      status: trainStatus,
+      details: `Executive Class · Departure at 17:30 · Buffer after flight arrival: ${bufferLeft >= 0 ? bufferLeft + ' min' : 'DEFICIT ' + Math.abs(bufferLeft) + ' min'}`,
       code: 'GE-1202',
-      statusMessage: 'MISSED CONNECTION RISK: 100%',
+      statusMessage:
+        bufferLeft < 0
+          ? `MISSED CONNECTION RISK: 100% · ${Math.abs(bufferLeft)} min deficit`
+          : `Connection Risk: HIGH · Only ${bufferLeft} min buffer`,
     },
     {
       id: 'node-hotel-1',
       type: 'hotel',
-      label: 'The Oberoi Amarvilas',
+      label: 'The Oberoi Amarvilas, Agra',
       from: 'Agra Cantt (AGC)',
       to: 'Taj East Gate Rd, Agra',
       scheduledDeparture: '20:00',
       scheduledArrival: '20:30',
-      status: 'warning',
-      details: 'Check-in cutoff 20:00 • Arrival postponed past 22:30 without intervention',
+      status: hotelStatus,
+      details: 'Premier Room · Check-in cutoff 20:00 — late arrival without waiver incurs penalty',
       code: 'OA-RES-4401',
-      statusMessage: 'LATE CHECK-IN — PENALTY RISK',
+      statusMessage: hotelStatus === 'warning' ? 'LATE CHECK-IN — PENALTY RISK' : 'At Risk — Cascade Impact',
+    },
+  ];
+}
+
+export function getDelayScenarioEdges(delayMins: number): ItineraryEdge[] {
+  const trainDep = 17 * 60 + 30;
+  const flightArr = 16 * 60 + 15 + delayMins;
+  const buffer = trainDep - flightArr;
+  return [
+    {
+      id: 'edge-1',
+      label: buffer < 0 ? `Connection broken · ${Math.abs(buffer)} min deficit` : `Buffer: ${buffer} min remaining`,
+      bufferMinutes: buffer,
+      status: buffer < 0 ? 'critical' : 'warning',
+    },
+    {
+      id: 'edge-2',
+      label: 'Agra Cantt → Oberoi Transfer',
+      bufferMinutes: 45,
+      status: buffer < 0 ? 'warning' : 'intact',
     },
   ];
 }
@@ -119,9 +159,9 @@ export function getCancelScenarioNodes(): ItineraryNode[] {
       scheduledDeparture: '14:00',
       scheduledArrival: '16:15',
       status: 'critical',
-      details: 'Boeing 787-8 Dreamliner • Grounded at BOM due to unserviceable hydraulic line',
+      details: 'Boeing 787-8 · Grounded at BOM — Unserviceable hydraulic line',
       code: 'AI-804',
-      statusMessage: 'FLIGHT CANCELED (Technical Issue)',
+      statusMessage: 'FLIGHT CANCELED — Technical Issue',
     },
     {
       id: 'node-train-1',
@@ -132,285 +172,269 @@ export function getCancelScenarioNodes(): ItineraryNode[] {
       scheduledDeparture: '17:30',
       scheduledArrival: '19:10',
       status: 'critical',
-      details: 'Executive Anubhuti Class • Passenger stranded in Mumbai; cannot board in Delhi',
+      details: 'Passenger stranded in Mumbai — upstream flight canceled',
       code: 'GE-1202',
-      statusMessage: 'MISSED CONNECTION — NO UPSTREAM FLIGHT',
+      statusMessage: 'MISSED CONNECTION — No Upstream Flight',
     },
     {
       id: 'node-hotel-1',
       type: 'hotel',
-      label: 'The Oberoi Amarvilas',
+      label: 'The Oberoi Amarvilas, Agra',
       from: 'Agra Cantt (AGC)',
       to: 'Taj East Gate Rd, Agra',
       scheduledDeparture: '20:00',
       scheduledArrival: '20:30',
       status: 'critical',
-      details: 'Premier Room with Taj Mahal View • Non-arrival without waiver will incur full charge',
+      details: 'Non-arrival without waiver = full night charge penalty',
       code: 'OA-RES-4401',
-      statusMessage: 'NO-SHOW — FULL PENALTY RISK',
-    },
-  ];
-}
-
-export function getDelayScenarioEdges(): ItineraryEdge[] {
-  return [
-    {
-      id: 'edge-flight-train',
-      label: 'DEL Connection Buffer Deficit (-105 min)',
-      bufferMinutes: -105,
-      status: 'critical',
-    },
-    {
-      id: 'edge-train-hotel',
-      label: 'Agra Arrival to Check-in Buffer Tight',
-      bufferMinutes: 15,
-      status: 'warning',
+      statusMessage: 'NO-SHOW — Full Penalty Risk',
     },
   ];
 }
 
 export function getCancelScenarioEdges(): ItineraryEdge[] {
   return [
-    {
-      id: 'edge-flight-train',
-      label: 'Flight canceled — Connection broken',
-      bufferMinutes: 0,
-      status: 'critical',
-    },
-    {
-      id: 'edge-train-hotel',
-      label: 'Ground leg isolated — Destination unreachable',
-      bufferMinutes: 0,
-      status: 'critical',
-    },
+    { id: 'edge-1', label: 'Flight canceled — connection broken', bufferMinutes: 0, status: 'critical' },
+    { id: 'edge-2', label: 'Destination unreachable', bufferMinutes: 0, status: 'critical' },
   ];
 }
 
-export function getDelayAgentLogs(): AgentLog[] {
+// ─── STANDBY FLIGHTS ──────────────────────────────────────────────────────────
+
+export const standbyFlights: StandbyFlight[] = [
+  {
+    id: 'sb-1',
+    flightCode: 'AI-806',
+    airline: 'Air India',
+    airlineCode: 'AI',
+    departure: '15:30',
+    arrival: '17:45',
+    aircraft: 'Airbus A320',
+    seatsAvailable: 3,
+    fareClass: 'Economy+',
+    fareDelta: '₹0 (airline covers)',
+    status: 'available',
+    gate: '34B',
+    terminal: 'T2',
+    durationMins: 135,
+  },
+  {
+    id: 'sb-2',
+    flightCode: '6E-331',
+    airline: 'IndiGo',
+    airlineCode: '6E',
+    departure: '14:45',
+    arrival: '17:00',
+    aircraft: 'Airbus A321neo',
+    seatsAvailable: 7,
+    fareClass: 'Economy',
+    fareDelta: '₹2,200 (you pay)',
+    status: 'available',
+    gate: '11A',
+    terminal: 'T1',
+    durationMins: 135,
+  },
+  {
+    id: 'sb-3',
+    flightCode: 'UK-992',
+    airline: 'Vistara',
+    airlineCode: 'UK',
+    departure: '15:15',
+    arrival: '17:25',
+    aircraft: 'Boeing 737-800',
+    seatsAvailable: 2,
+    fareClass: 'Business',
+    fareDelta: '₹8,500 (upgrade cost)',
+    status: 'available',
+    gate: '22C',
+    terminal: 'T2',
+    durationMins: 130,
+  },
+  {
+    id: 'sb-4',
+    flightCode: 'SG-104',
+    airline: 'SpiceJet',
+    airlineCode: 'SG',
+    departure: '16:10',
+    arrival: '18:30',
+    aircraft: 'Boeing 737 MAX',
+    seatsAvailable: 1,
+    fareClass: 'Economy',
+    fareDelta: '₹1,800 (you pay)',
+    status: 'waitlisted',
+    gate: '8D',
+    terminal: 'T1',
+    durationMins: 140,
+  },
+  {
+    id: 'sb-5',
+    flightCode: 'AI-860',
+    airline: 'Air India',
+    airlineCode: 'AI',
+    departure: '16:30',
+    arrival: '18:45',
+    aircraft: 'Airbus A320',
+    seatsAvailable: 0,
+    fareClass: 'Economy',
+    fareDelta: '₹0 (airline covers)',
+    status: 'full',
+    gate: '41A',
+    terminal: 'T2',
+    durationMins: 135,
+  },
+];
+
+// ─── AGENT LOGS ───────────────────────────────────────────────────────────────
+
+export function getDelayAgentLogs(delayMins: number): AgentLog[] {
+  const trainDep = 17 * 60 + 30;
+  const flightArr = 16 * 60 + 15 + delayMins;
+  const deficit = trainDep - flightArr;
+
   return [
-    {
-      id: 'log-del-1',
-      timestamp: '14:32:05',
-      agent: 'Carrier',
-      message: 'Disruption detected: AI-804 delayed 180 mins due to adverse weather at BOM. Initiating recovery protocol...',
-      type: 'warning',
-    },
-    {
-      id: 'log-del-2',
-      timestamp: '14:32:08',
-      agent: 'Carrier',
-      message: 'Scanning alternative flights BOM → DEL via Amadeus Sandbox API... Found 3 viable slots.',
-      type: 'info',
-    },
-    {
-      id: 'log-del-3',
-      timestamp: '14:32:12',
-      agent: 'Carrier',
-      message: 'Best alternative: AI-806 departing 15:30, arriving 17:45. Seat 12A available in Economy+.',
-      type: 'success',
-    },
-    {
-      id: 'log-del-4',
-      timestamp: '14:32:16',
-      agent: 'Transit',
-      message: 'Original connection Gatimaan Express 17:30 no longer viable. Buffer deficit: -105 mins.',
-      type: 'error',
-    },
-    {
-      id: 'log-del-5',
-      timestamp: '14:32:20',
-      agent: 'Transit',
-      message: 'Re-routing rail segment: Vande Bharat Express at 19:45 OR private chauffeur (ETA 3h 15m).',
-      type: 'info',
-    },
-    {
-      id: 'log-del-6',
-      timestamp: '14:32:25',
-      agent: 'Hospitality',
-      message: 'Hotel check-in deadline 20:00 at risk. Initiating no-show waiver under Force Majeure clause.',
-      type: 'warning',
-    },
-    {
-      id: 'log-del-7',
-      timestamp: '14:32:29',
-      agent: 'Hospitality',
-      message: 'Automated waiver request sent to Oberoi Amarvilas front desk. Awaiting confirmation...',
-      type: 'info',
-    },
-    {
-      id: 'log-del-8',
-      timestamp: '14:32:34',
-      agent: 'Regulatory',
-      message: 'Delay exceeds 2 hours. Pre-drafting DGCA CAR Section 3 Series M Part IV compensation claim.',
-      type: 'warning',
-    },
-    {
-      id: 'log-del-9',
-      timestamp: '14:32:38',
-      agent: 'Regulatory',
-      message: 'Estimated compensation: ₹10,000 under DGCA guidelines for delays >3 hours on domestic routes.',
-      type: 'info',
-    },
-    {
-      id: 'log-del-10',
-      timestamp: '14:32:44',
-      agent: 'Carrier',
-      message: 'Recovery plan generated. 2 Pareto-optimal options ready for passenger review.',
-      type: 'success',
-    },
+    { id: 'l1', timestamp: '14:32:05', agent: 'Carrier', type: 'warning',
+      message: `Disruption alert: AI-804 delayed ${delayMins} min due to adverse weather conditions at BOM. Recovery protocol initiated.` },
+    { id: 'l2', timestamp: '14:32:09', agent: 'Carrier', type: 'info',
+      message: `Scanning available standby seats BOM → DEL across 5 partner carriers via GDS... Found ${standbyFlights.filter(f => f.status === 'available').length} viable slots.` },
+    { id: 'l3', timestamp: '14:32:14', agent: 'Carrier', type: 'success',
+      message: `Best interline option: AI-806 departing 15:30, arriving 17:45 (Economy+, ₹0 passenger cost). Seat 12A held for 10 mins.` },
+    { id: 'l4', timestamp: '14:32:19', agent: 'Transit', type: 'error',
+      message: `Cascade detected: AI-804 arrival ${new Date(Date.now()).toTimeString().slice(0,5)} → train departure 17:30 → connection ${deficit < 0 ? 'DEFICIT ' + Math.abs(deficit) + ' min' : 'buffer only ' + deficit + ' min'}.` },
+    { id: 'l5', timestamp: '14:32:24', agent: 'Transit', type: 'info',
+      message: `Alternate rail: Vande Bharat Express departs 19:45 (viable if flight lands by 19:00). Private chauffeur DEL→AGR also available (3h 15m, ₹3,200).` },
+    { id: 'l6', timestamp: '14:32:30', agent: 'Hospitality', type: 'warning',
+      message: `Oberoi Amarvilas check-in cutoff 20:00 at risk. Initiating automated no-show waiver request under Force Majeure clause.` },
+    { id: 'l7', timestamp: '14:32:35', agent: 'Hospitality', type: 'success',
+      message: `Waiver accepted. Oberoi Amarvilas extended check-in deadline to 23:30 with zero penalty. Reservation OA-RES-4401 secured.` },
+    { id: 'l8', timestamp: '14:32:41', agent: 'Regulatory', type: 'warning',
+      message: `Delay >${delayMins >= 120 ? '2' : '1'} hours on domestic route triggers DGCA CAR Section 3 Series M Part IV compensation rights.` },
+    { id: 'l9', timestamp: '14:32:46', agent: 'Regulatory', type: 'info',
+      message: `Compensation claim pre-drafted: ${delayMins >= 180 ? '₹10,000' : '₹7,500'} statutory amount. Claim ready for one-tap submission.` },
+    { id: 'l10', timestamp: '14:32:52', agent: 'Carrier', type: 'success',
+      message: `Recovery bundle assembled. Please review standby options and select your preferred flight to finalize the recovery plan.` },
   ];
 }
 
 export function getCancelAgentLogs(): AgentLog[] {
   return [
-    {
-      id: 'log-cnc-1',
-      timestamp: '14:10:02',
-      agent: 'Carrier',
-      message: 'CRITICAL ALERT: AI-804 BOM → DEL canceled due to technical issue (aircraft maintenance grounding). Initiating Level-1 Emergency Protocol.',
-      type: 'error',
-    },
-    {
-      id: 'log-cnc-2',
-      timestamp: '14:10:06',
-      agent: 'Carrier',
-      message: 'Querying GDS interline inventory for immediate replacement flights BOM → DEL... 2 immediate seats identified on partner carrier.',
-      type: 'info',
-    },
-    {
-      id: 'log-cnc-3',
-      timestamp: '14:10:11',
-      agent: 'Carrier',
-      message: 'Partner flight Vistara UK-992 departing 15:15 (2 seats) and Air India AI-860 departing 16:30 reserved on 30-minute hold.',
-      type: 'warning',
-    },
-    {
-      id: 'log-cnc-4',
-      timestamp: '14:10:17',
-      agent: 'Transit',
-      message: 'Cascading failure detected: Gatimaan Express connection (17:30 NZM) broken. Upstream arrival before departure impossible.',
-      type: 'error',
-    },
-    {
-      id: 'log-cnc-5',
-      timestamp: '14:10:22',
-      agent: 'Transit',
-      message: 'Auto-filing IRCTC Ticket Deposit Receipt (TDR) under disruption clause for 100% railway fare refund without cancellation penalty.',
-      type: 'info',
-    },
-    {
-      id: 'log-cnc-6',
-      timestamp: '14:10:28',
-      agent: 'Hospitality',
-      message: 'Hotel check-in deadline 20:00 will be breached. Contacting Oberoi Amarvilas reservation desk with flight cancellation attestation.',
-      type: 'warning',
-    },
-    {
-      id: 'log-cnc-7',
-      timestamp: '14:10:35',
-      agent: 'Hospitality',
-      message: 'Oberoi Amarvilas accepted late check-in extension to 23:30 with full fee waiver. Reservation status secured.',
-      type: 'success',
-    },
-    {
-      id: 'log-cnc-8',
-      timestamp: '14:10:41',
-      agent: 'Regulatory',
-      message: 'Involuntary cancellation notified <24 hours prior triggers statutory DGCA CAR Section 3 Series M Part IV compensation mandate.',
-      type: 'warning',
-    },
-    {
-      id: 'log-cnc-9',
-      timestamp: '14:10:47',
-      agent: 'Regulatory',
-      message: 'Generated formal compensation claim: ₹15,000 statutory compensation + 100% full ticket reimbursement.',
-      type: 'info',
-    },
-    {
-      id: 'log-cnc-10',
-      timestamp: '14:10:53',
-      agent: 'Carrier',
-      message: 'Multi-modal recovery bundle assembled. Two comprehensive options synthesized and awaiting passenger authorization.',
-      type: 'success',
-    },
+    { id: 'c1', timestamp: '14:10:02', agent: 'Carrier', type: 'error',
+      message: 'CRITICAL: AI-804 BOM→DEL canceled — aircraft grounded (hydraulic system fault). Level-1 emergency protocol activated.' },
+    { id: 'c2', timestamp: '14:10:07', agent: 'Carrier', type: 'info',
+      message: 'Querying interline inventory across 6 carriers for immediate BOM→DEL seats... 3 carrier options found.' },
+    { id: 'c3', timestamp: '14:10:13', agent: 'Carrier', type: 'warning',
+      message: 'Vistara UK-992 (15:15) has 2 business seats on hold. IndiGo 6E-331 (14:45) has 7 economy seats available.' },
+    { id: 'c4', timestamp: '14:10:18', agent: 'Transit', type: 'error',
+      message: 'Total cascade failure: Gatimaan Express 17:30 NZM unreachable — passenger cannot board from Delhi.' },
+    { id: 'c5', timestamp: '14:10:24', agent: 'Transit', type: 'info',
+      message: 'Auto-filing IRCTC TDR (Ticket Deposit Receipt) for 100% rail fare refund — disruption clause applied.' },
+    { id: 'c6', timestamp: '14:10:30', agent: 'Hospitality', type: 'warning',
+      message: 'Hotel check-in 20:00 will be breached. Sending flight cancellation attestation to Oberoi Amarvilas.' },
+    { id: 'c7', timestamp: '14:10:36', agent: 'Hospitality', type: 'success',
+      message: 'Oberoi Amarvilas: late check-in extended to 23:30, zero penalty. Reservation fully secured.' },
+    { id: 'c8', timestamp: '14:10:42', agent: 'Regulatory', type: 'warning',
+      message: 'Involuntary cancellation <24h notice → DGCA CAR Section 3 Series M Part IV mandatory compensation triggered.' },
+    { id: 'c9', timestamp: '14:10:48', agent: 'Regulatory', type: 'info',
+      message: 'Claim generated: ₹15,000 statutory compensation + 100% ticket refund. Letter ready for export.' },
+    { id: 'c10', timestamp: '14:10:54', agent: 'Carrier', type: 'success',
+      message: 'Full recovery bundle ready. Select your preferred standby flight to confirm the re-route plan.' },
   ];
 }
 
-export function getDelayRecoveryOptions(): RecoveryOption[] {
+// ─── RECOVERY OPTIONS ─────────────────────────────────────────────────────────
+
+export function buildRecoveryOptions(
+  selectedFlight: StandbyFlight | null,
+  scenario: DisruptionScenario
+): RecoveryOption[] {
+  if (scenario === 'cancel') {
+    const chosenFlight = selectedFlight ?? standbyFlights[0];
+    return [
+      {
+        id: 'r1',
+        name: `Interline Rebook via ${chosenFlight.airline}`,
+        tag: 'Full Interline Re-route',
+        description: `Immediate ticket reissue on ${chosenFlight.flightCode} with seamless luggage transfer and private chauffeur to Agra.`,
+        steps: [
+          `Rebook to ${chosenFlight.flightCode} (${chosenFlight.departure} DEP, ${chosenFlight.arrival} ARR)`,
+          'Full automatic refund for Gatimaan Express ticket',
+          `Executive chauffeur from ${chosenFlight.terminal} Terminal → Oberoi Amarvilas Agra`,
+          'Hotel check-in extended to 23:30 (confirmed)',
+        ],
+        arrivalDelay: '+90 min',
+        costDelta: chosenFlight.fareDelta,
+        stressScore: 2,
+        recommended: true,
+        flightCode: chosenFlight.flightCode,
+      },
+      {
+        id: 'r2',
+        name: 'Next Flight + Vande Bharat Express',
+        tag: 'Rail Re-route',
+        description: 'Rebook to the next available Air India flight and connect via late Vande Bharat Express.',
+        steps: [
+          'Rebook to Air India AI-860 (16:30 DEP, 18:45 ARR)',
+          'Metro transfer DEL T3 → New Delhi Railway Station',
+          'Vande Bharat Express #22470 (20:10 DEP, 21:40 ARR Agra)',
+          'Pre-paid taxi to Oberoi Amarvilas (ETA 22:15)',
+        ],
+        arrivalDelay: '+105 min',
+        costDelta: '₹0 (carrier absorbed)',
+        stressScore: 4,
+        recommended: false,
+        flightCode: 'AI-860',
+      },
+    ];
+  }
+
+  const chosenFlight = selectedFlight ?? standbyFlights[0];
+  const chosenArrMins = parseInt(chosenFlight.arrival.split(':')[0]) * 60 + parseInt(chosenFlight.arrival.split(':')[1]);
+  const trainDep = 17 * 60 + 30;
+  const bufferAfterChosen = trainDep - chosenArrMins;
+
   return [
     {
-      id: 'rec-delay-1',
-      name: 'Carrier Rebook + Expressway Chauffeur',
+      id: 'r1',
+      name: `Rebook ${chosenFlight.flightCode} + Chauffeur Transfer`,
       tag: 'Balanced Recovery',
-      description: 'Rebook to earlier standby flight AI-806 and switch transit to a private luxury cab from Delhi directly to Agra.',
+      description: `Switch to ${chosenFlight.flightCode} (${chosenFlight.airline}) and replace the train leg with a private chauffeur direct to Agra.`,
       steps: [
-        'Rebook to AI-806 (15:30 DEP)',
-        'Cancel Gatimaan Express ticket (full refund)',
-        'Book premium cab DEL → Agra (3h 15m)',
-        'Hotel check-in pushed to 21:00 (waiver approved)',
+        `Rebook to ${chosenFlight.flightCode} (${chosenFlight.departure} DEP, ${chosenFlight.arrival} ARR) — ${chosenFlight.fareClass}`,
+        'Cancel Gatimaan Express ticket (full refund processed)',
+        `Premium cab from DEL ${chosenFlight.terminal} Terminal → Oberoi Amarvilas Agra (3h 15m)`,
+        'Hotel check-in extended to 22:00 (waiver approved)',
+      ],
+      arrivalDelay: bufferAfterChosen >= 45 ? '+30 min' : '+60 min',
+      costDelta: chosenFlight.fareDelta,
+      stressScore: 2,
+      recommended: true,
+      flightCode: chosenFlight.flightCode,
+    },
+    {
+      id: 'r2',
+      name: 'Rebook + Vande Bharat Express',
+      tag: 'Rail Option',
+      description: `Take ${chosenFlight.flightCode} and catch the late Vande Bharat Express from Delhi if arrival time permits.`,
+      steps: [
+        `Board ${chosenFlight.flightCode} (${chosenFlight.departure} DEP)`,
+        `Transfer DEL ${chosenFlight.terminal} → Hazrat Nizamuddin (metro, 35 min)`,
+        bufferAfterChosen >= 30 ? 'Catch Gatimaan Express 17:30 (tight but viable)' : 'Board Vande Bharat Express at 19:45',
+        'Arrive Agra Cantt, taxi to Oberoi Amarvilas',
       ],
       arrivalDelay: '+45 min',
       costDelta: '₹0 (airline covered)',
-      stressScore: 2,
-      recommended: true,
-    },
-    {
-      id: 'rec-delay-2',
-      name: 'Express Interline Transfer',
-      tag: 'Ultra-Fast Premium',
-      description: 'Emergency rebook to rival carrier IndiGo with VIP tarmac transfer, express lounge access, and pre-staged high-speed sedan.',
-      steps: [
-        'Emergency rebook to IndiGo 6E-331 (14:45 DEP)',
-        'Priority lounge access at DEL T1',
-        'Pre-booked Luxury sedan DEL → Agra',
-        'Hotel ETA: 20:30',
-      ],
-      arrivalDelay: '+30 min',
-      costDelta: '₹4,500 (partial coverage)',
-      stressScore: 1,
+      stressScore: 3,
       recommended: false,
+      flightCode: chosenFlight.flightCode,
     },
   ];
 }
 
-export function getCancelRecoveryOptions(): RecoveryOption[] {
-  return [
-    {
-      id: 'rec-cancel-1',
-      name: 'Vistara VIP Interline + Dedicated Chauffeur',
-      tag: 'Full Interline Re-route',
-      description: 'Immediate ticket reissue on Vistara UK-992 with seamless luggage transfer, followed by private chauffeur transit along Yamuna Expressway.',
-      steps: [
-        'Rebook to Vistara UK-992 BOM → DEL (15:15 DEP, 17:25 ARR)',
-        'Full automatic refund credited for Gatimaan Express',
-        'Dedicated executive chauffeur DEL T3 → Oberoi Amarvilas Agra',
-        'Hotel guaranteed check-in extended to 22:30 (waiver confirmed)',
-      ],
-      arrivalDelay: '+90 min',
-      costDelta: '₹0 (carrier absorbed)',
-      stressScore: 2,
-      recommended: true,
-    },
-    {
-      id: 'rec-cancel-2',
-      name: 'Next Available Flight + Vande Bharat Express',
-      tag: 'Direct Rail Re-route',
-      description: 'Rebook onto Air India AI-860 departing 16:30, connecting to the late-evening Vande Bharat Express to Agra.',
-      steps: [
-        'Rebook to Air India AI-860 (16:30 DEP, 18:45 ARR)',
-        'Fast-track metro transfer DEL T3 to New Delhi Railway Station',
-        'Board Vande Bharat Express #22470 (20:10 DEP, 21:40 ARR at Agra)',
-        'Short pre-paid taxi to Oberoi Amarvilas (ETA 22:15)',
-      ],
-      arrivalDelay: '+105 min',
-      costDelta: '₹0 (carrier absorbed)',
-      stressScore: 4,
-      recommended: false,
-    },
-  ];
-}
+// ─── COMPENSATION CLAIM ───────────────────────────────────────────────────────
 
-export function getCompensationClaim(scenario: DisruptionScenario): CompensationClaim {
+export function getCompensationClaim(
+  scenario: DisruptionScenario,
+  delayMins: number
+): CompensationClaim {
   if (scenario === 'cancel') {
     return {
       passengerName: 'Alex Vance',
@@ -418,86 +442,111 @@ export function getCompensationClaim(scenario: DisruptionScenario): Compensation
       flightCode: 'AI-804',
       route: 'Mumbai (BOM) → Delhi (DEL)',
       disruptionType: 'Involuntary Flight Cancellation',
-      delayDuration: 'Flight Canceled (Tech Defect)',
+      delayDuration: 'Flight Canceled (Technical Defect)',
       regulation: 'DGCA CAR Section 3 Series M Part IV',
-      compensationAmount: '₹15,000 + full refund',
-      claimDate: '2024-03-15',
-      body: `To: Air India Nodal Officer & Appellate Authority\nReference: PNR AR-9082 / AI-804 (Mumbai to Delhi) - Scheduled Departure March 15, 2024, 14:00 IST\n\nDear Sir/Madam,\n\nI am writing to submit a formal statutory compensation claim pursuant to the Directorate General of Civil Aviation (DGCA) Civil Aviation Requirements (CAR), Section 3 - Air Transport, Series M, Part IV, Issue I, dated August 6, 2010 (as amended).\n\nOn March 15, 2024, flight AI-804 from Chhatrapati Shivaji Maharaj International Airport (BOM) to Indira Gandhi International Airport (DEL), on which I held a confirmed reservation under PNR AR-9082, was canceled involuntarily due to technical maintenance defects. Notice of cancellation was communicated less than 2 hours prior to scheduled departure, failing the statutory 24-hour notification window, and no equivalent alternate arrangement was provided by the operating carrier within the stipulated two-hour threshold.\n\nIn accordance with Clause 3.3.2 of the DGCA CAR Series M Part IV, passengers affected by cancellations without requisite advance notice on domestic routes exceeding 2 hours block time are entitled to statutory compensation of ₹15,000 (or booked one-way basic fare plus airline fuel charge, whichever is less, along with a full refund of all unutilized sectors). Due to the carrier-side technical grounding, extraordinary circumstances exemptions do not apply.\n\nPlease remit the statutory compensation of ₹15,000 along with the full fare reimbursement to the originating payment account within 14 business days. Failure to settle this claim will result in escalation to the AirSewa Grievance Redressal Portal and the Ministry of Civil Aviation Ombudsman.\n\nYours faithfully,\nAlex Vance\nPassenger & Claimant`,
+      compensationAmount: '₹15,000 + Full Refund',
+      claimDate: new Date().toISOString().split('T')[0],
+      body: `To: Air India Nodal Officer & Appellate Authority
+Reference: PNR AR-9082 / AI-804 (Mumbai to Delhi)
+Scheduled Departure: 14:00 IST
+
+Dear Sir/Madam,
+
+I am writing to submit a formal statutory compensation claim pursuant to the Directorate General of Civil Aviation (DGCA) Civil Aviation Requirements (CAR), Section 3 — Air Transport, Series M, Part IV, Issue I.
+
+On the date of travel, flight AI-804 from Chhatrapati Shivaji Maharaj International Airport (BOM) to Indira Gandhi International Airport (DEL), on which I held a confirmed reservation under PNR AR-9082, was canceled involuntarily due to a technical aircraft maintenance defect. Notice of cancellation was communicated less than 2 hours prior to scheduled departure, failing the statutory 24-hour notification window mandated under DGCA regulations.
+
+Pursuant to Clause 3.3.2 of the DGCA CAR Series M Part IV, passengers affected by cancellations without requisite advance notice are entitled to statutory compensation of ₹15,000 along with a full refund of all unutilized sectors. As the cancellation was due to a carrier-side technical grounding, extraordinary circumstance exemptions do not apply.
+
+I request that the compensation of ₹15,000 be remitted to the originating payment account associated with PNR AR-9082 within 14 business days. Failure to resolve this claim will result in escalation to the AirSewa Grievance Redressal Portal and the Ministry of Civil Aviation Ombudsman.
+
+Yours faithfully,
+Alex Vance
+Passenger & Claimant`,
     };
   }
 
-  // Default to delay scenario
+  const amount = delayMins >= 180 ? '₹10,000' : '₹7,500';
   return {
     passengerName: 'Alex Vance',
     pnr: 'AR-9082',
     flightCode: 'AI-804',
     route: 'Mumbai (BOM) → Delhi (DEL)',
-    disruptionType: 'Flight Delay (>3 Hours)',
-    delayDuration: '180 Minutes (3h 00m)',
+    disruptionType: `Flight Delay (${delayMins} Minutes)`,
+    delayDuration: `${delayMins} Minutes (${Math.floor(delayMins / 60)}h ${delayMins % 60}m)`,
     regulation: 'DGCA CAR Section 3 Series M Part IV',
-    compensationAmount: '₹10,000',
-    claimDate: '2024-03-15',
-    body: `To: Air India Customer Relations & Nodal Officer\nReference: PNR AR-9082 / AI-804 (Mumbai to Delhi) - Scheduled Departure March 15, 2024, 14:00 IST\n\nDear Sir/Madam,\n\nI am submitting a formal claim for statutory compensation and care provision under the Directorate General of Civil Aviation (DGCA) Civil Aviation Requirements (CAR), Section 3 - Air Transport, Series M, Part IV, governing facilities and compensation to passengers in case of flight delays and cancellations.\n\nI was booked on flight AI-804 scheduled to depart Mumbai (BOM) at 14:00 IST on March 15, 2024, arriving in Delhi (DEL) at 16:15 IST. The flight suffered an unmitigated operational delay of 180 minutes (3 hours), with revised departure at 17:00 IST and arrival at 19:15 IST. This delay caused a total collapse of onward inter-modal transit connections, specifically the Gatimaan Express departing at 17:30 IST from Hazrat Nizamuddin.\n\nPursuant to DGCA CAR Section 3 Series M Part IV, Clause 3.5, for flights with a block time between 1 and 2 hours experiencing delays exceeding 3 hours, the operating carrier is mandated to provide free refreshments/meals and statutory compensation of ₹10,000 for incurred passenger damages and delays where alternative travel was not expedited by the carrier.\n\nI hereby request that the compensation amount of ₹10,000 be disbursed directly to the passenger account associated with PNR AR-9082 within 14 calendar days, as prescribed under civil aviation consumer protection regulations. In the absence of a satisfactory response, this dispute will be escalated to the DGCA Consumer Grievance Cell.\n\nSincerely,\nAlex Vance\nPassenger & Claimant`,
+    compensationAmount: amount,
+    claimDate: new Date().toISOString().split('T')[0],
+    body: `To: Air India Customer Relations & Nodal Officer
+Reference: PNR AR-9082 / AI-804 (Mumbai to Delhi)
+Scheduled Departure: 14:00 IST
+
+Dear Sir/Madam,
+
+I am submitting a formal compensation claim under the Directorate General of Civil Aviation (DGCA) Civil Aviation Requirements (CAR), Section 3 — Air Transport, Series M, Part IV, governing passenger rights in cases of flight delays.
+
+I was booked on flight AI-804 scheduled to depart Mumbai (BOM) at 14:00 IST. The flight suffered an operational delay of ${delayMins} minutes (${Math.floor(delayMins / 60)} hours ${delayMins % 60} minutes) due to adverse weather conditions at origin. This delay caused a cascading failure of my onward inter-modal connections, specifically the Gatimaan Express departure at 17:30 IST from Hazrat Nizamuddin.
+
+Pursuant to DGCA CAR Section 3 Series M Part IV, Clause 3.5, for delays exceeding ${delayMins >= 180 ? '3' : '2'} hours on domestic routes, the operating carrier is mandated to provide statutory compensation of ${amount} for demonstrated passenger disruption where alternative arrangements were not expedited within prescribed time limits.
+
+I request disbursement of ${amount} to the originating payment account within 14 calendar days. In absence of a satisfactory response, this dispute will be escalated to the DGCA Consumer Grievance Cell.
+
+Sincerely,
+Alex Vance
+Passenger & Claimant`,
   };
 }
 
-export function getRecoveredNodes(): ItineraryNode[] {
+// ─── RECOVERED STATE ──────────────────────────────────────────────────────────
+
+export function getRecoveredNodes(selectedFlight: StandbyFlight | null): ItineraryNode[] {
+  const flight = selectedFlight ?? standbyFlights[0];
   return [
     {
       id: 'node-flight-1',
       type: 'flight',
-      label: 'Air India AI-806',
+      label: `${flight.airline} ${flight.flightCode}`,
       from: 'Mumbai (BOM)',
       to: 'Delhi (DEL)',
-      scheduledDeparture: '15:30',
-      scheduledArrival: '17:45',
+      scheduledDeparture: flight.departure,
+      scheduledArrival: flight.arrival,
       status: 'recovered',
-      details: 'Boeing 787-8 Dreamliner • Economy+ Seat 12A • Gate 34B',
-      code: 'AI-806',
-      statusMessage: 'REBOOKED & CONFIRMED (AI-806, Seat 12A)',
+      details: `${flight.aircraft} · ${flight.fareClass} · Gate ${flight.gate} · ${flight.terminal} Terminal`,
+      code: flight.flightCode,
+      statusMessage: `REBOOKED & CONFIRMED — Gate ${flight.gate}`,
     },
     {
-      id: 'node-train-1',
+      id: 'node-transfer-1',
       type: 'transfer',
       label: 'Yamuna Expressway Executive Chauffeur',
-      from: 'DEL T3 Airport',
+      from: `DEL ${flight.terminal} Terminal`,
       to: 'The Oberoi Amarvilas, Agra',
-      scheduledDeparture: '18:15',
+      scheduledDeparture: flight.arrival,
       scheduledArrival: '21:30',
       status: 'recovered',
-      details: 'Mercedes-Benz E-Class • Chauffeur: Rajesh Kumar (+91 98110 44219) • Fastag VIP Lane',
+      details: 'Mercedes-Benz E-Class · Chauffeur: Rajesh Kumar · VIP Fastag Lane',
       code: 'CHAUFFEUR-DEL-AGC',
       statusMessage: 'DISPATCHED & EN ROUTE',
     },
     {
       id: 'node-hotel-1',
       type: 'hotel',
-      label: 'The Oberoi Amarvilas',
+      label: 'The Oberoi Amarvilas, Agra',
       from: 'Agra Cantt (AGC)',
       to: 'Taj East Gate Rd, Agra',
       scheduledDeparture: '21:30',
       scheduledArrival: '22:00',
       status: 'recovered',
-      details: 'Premier Room with Taj View • Check-in deadline extended to 23:30 • No penalty fee',
+      details: 'Premier Room · Taj View · Check-in extended to 23:30 · Zero penalty',
       code: 'OA-RES-4401',
-      statusMessage: 'WAIVER APPROVED • LATE CHECK-IN ASSURED',
+      statusMessage: 'WAIVER APPROVED · LATE CHECK-IN ASSURED',
     },
   ];
 }
 
 export function getRecoveredEdges(): ItineraryEdge[] {
   return [
-    {
-      id: 'edge-flight-train',
-      label: 'Baggage Priority + Chauffeur Pickup Buffer (30m)',
-      bufferMinutes: 30,
-      status: 'recovered',
-    },
-    {
-      id: 'edge-train-hotel',
-      label: 'Hotel Late Check-in Buffer Window (60m)',
-      bufferMinutes: 60,
-      status: 'recovered',
-    },
+    { id: 'edge-1', label: 'Baggage Priority + Chauffeur Pickup (30 min)', bufferMinutes: 30, status: 'recovered' },
+    { id: 'edge-2', label: 'Hotel Late Check-in Window (90 min)', bufferMinutes: 90, status: 'recovered' },
   ];
 }
