@@ -38,10 +38,10 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-white flex">
 
-      {/* ── LEFT PANEL ── */}
+      {/* LEFT PANEL */}
       <div className="hidden lg:flex lg:w-[50%] bg-indigo-700 flex-col justify-between p-14 relative overflow-hidden">
 
-        {/* Subtle background rings */}
+        {/* Background rings */}
         <div className="absolute inset-0 opacity-10 pointer-events-none">
           {Array.from({ length: 6 }).map((_, i) => (
             <div
@@ -72,18 +72,18 @@ export default function LoginPage() {
           </h1>
           <p className="text-indigo-200 text-base leading-relaxed max-w-sm">
             Smart itinerary protection across flights, trains, and hotels.
-            When disruptions happen, we handle everything — automatically.
+            When disruptions happen, we handle everything automatically.
           </p>
         </div>
 
-        {/* Trust badge */}
+        {/* Trust line */}
         <div className="relative flex items-center gap-3 text-indigo-200 text-sm">
           <ShieldCheck className="w-5 h-5 text-indigo-300 shrink-0" />
-          <span>256-bit encrypted · DGCA compliant · Available 24 / 7</span>
+          <span>256-bit encrypted &middot; DGCA compliant &middot; Available 24/7</span>
         </div>
       </div>
 
-      {/* ── RIGHT PANEL ── */}
+      {/* RIGHT PANEL */}
       <div className="flex-1 flex items-center justify-center p-8 bg-gray-50">
         <div className="w-full max-w-md">
 
@@ -102,9 +102,7 @@ export default function LoginPage() {
 
             {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Email address
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Email address</label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
@@ -161,7 +159,7 @@ export default function LoginPage() {
               {loading ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in…
+                  Signing in&hellip;
                 </>
               ) : (
                 <>
