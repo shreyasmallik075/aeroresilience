@@ -23,7 +23,7 @@ export default function TopNavBar({ user, onReset, onLogout }: TopNavBarProps) {
         </div>
         <div className="flex items-baseline gap-2">
           <span className="font-bold text-gray-900 text-base tracking-tight">AeroResilience</span>
-          <span className="text-xs text-gray-400 font-mono hidden sm:inline">// Engine v1.0</span>
+          
         </div>
 
         {/* Divider */}
@@ -55,7 +55,7 @@ export default function TopNavBar({ user, onReset, onLogout }: TopNavBarProps) {
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-800 hover:bg-gray-50 text-xs font-medium transition-all"
         >
           <RotateCcw className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Reset Demo</span>
+          <span className="hidden sm:inline">Reset</span>
         </button>
 
         {/* User menu */}

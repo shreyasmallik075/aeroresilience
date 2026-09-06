@@ -233,12 +233,12 @@ export default function DashboardPage() {
 
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white px-6 py-2.5 flex items-center justify-between text-xs text-gray-400">
-        <span className="font-mono">AeroResilience v1.0 — PS-2: Travel Disruption Recovery</span>
+        <span>© {new Date().getFullYear()} AeroResilience. All rights reserved.</span>
         <span className="flex items-center gap-2">
           <span className={`w-1.5 h-1.5 rounded-full ${isSimulating ? "bg-amber-400 pulse-dot" : "bg-green-400"}`} />
           {isSimulating ? "Agents running…" : recoveryAccepted ? "Recovery complete" : "System ready"}
         </span>
-        <span className="font-mono">Hackathon Demo · {new Date().toLocaleDateString("en-IN")}</span>
+        <span>Privacy Policy · Terms of Service</span>
       </footer>
 
       <CompensationModal claim={compensationClaim} isOpen={showCompensation} onClose={() => setShowCompensation(false)} />
